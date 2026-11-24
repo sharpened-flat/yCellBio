@@ -1,0 +1,159 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Stopwatch</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f4f4f9; color: #222; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    .controls { display: flex; gap: 10px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    button { padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; background: #e0e0e0; transition: 0.2s; }
+    button:hover { filter: brightness(0.92); }
+    .btn-add { background: #2563eb; color: white; }
+    .btn-start { background: #16a34a; color: white; }
+    .btn-stop { background: #dc2626; color: white; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+    .card { background: white; padding: 1.25rem; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); display: flex; flex-direction: column; gap: 0.75rem; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; }
+    .title-input { font-size: 1.1rem; font-weight: bold; border: 1px solid transparent; border-bottom: 1px dashed #ccc; width: 75%; padding: 2px 4px; }
+    .title-input:focus { outline: none; border-bottom: 1px solid #2563eb; }
+    .time { font-size: 2rem; font-family: monospace; font-weight: bold; text-align: center; background: #f8fafc; padding: 0.5rem; border-radius: 6px; }
+    .btn-row { display: flex; gap: 6px; justify-content: center; }
+    .laps { max-height: 100px; overflow-y: auto; font-size: 0.85rem; font-family: monospace; border-top: 1px solid #eee; padding-top: 6px; }
+    .lap-item { display: flex; justify-content: space-between; padding: 2px 0; color: #555; }
+  </style>
+</head>
+<body>
+
+
+  <div class="controls">
+    <button class="btn-add" onclick="addStopwatch()">+ Add Stopwatch</button>
+    <button class="btn-start" onclick="controlAll('start')">Start All</button>
+    <button class="btn-stop" onclick="controlAll('stop')">Stop All</button>
+    <button onclick="controlAll('reset')">Reset All</button>
+  </div>
+
+
+  <div class="grid" id="grid"></div>
+
+
+  <script>
+    let stopwatches = [];
+    let nextId = 1;
+
+
+    function formatTime(ms) {
+      const totalSeconds = Math.floor(ms / 1000);
+      const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+      const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+      const seconds = String(totalSeconds % 60).padStart(2, '0');
+      const centiseconds = String(Math.floor((ms % 1000) / 10)).padStart(2, '0');
+      // return `${hours}:${minutes}:${seconds}.${centiseconds}`;
+      return `${hours}:${minutes}`;
+    }
+
+
+    function addStopwatch() {
+      const id = nextId++;
+      const sw = { id, elapsed: 0, running: false, lastTick: 0, laps: [] };
+      stopwatches.push(sw);
+
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.id = `sw-${id}`;
+      card.innerHTML = `
+        <div class="card-header">
+          <input class="title-input" type="text" value="Stopwatch ${id}" aria-label="Stopwatch Name">
+          <button onclick="removeStopwatch(${id})" title="Delete">✕</button>
+        </div>
+        <div class="time" id="time-${id}">00:00</div>
+        <div class="btn-row">
+          <button class="btn-start" id="toggle-${id}" onclick="toggleStopwatch(${id})">Start</button>
+          <button onclick="lapStopwatch(${id})">Lap</button>
+          <button onclick="resetStopwatch(${id})">Reset</button>
+        </div>
+        <div class="laps" id="laps-${id}"></div>
+      `;
+      document.getElementById('grid').appendChild(card);
+    }
+
+
+    function toggleStopwatch(id) {
+      const sw = stopwatches.find(s => s.id === id);
+      if (!sw) return;
+      const btn = document.getElementById(`toggle-${id}`);
+      if (sw.running) {
+        sw.elapsed += performance.now() - sw.lastTick;
+        sw.running = false;
+        btn.textContent = 'Start';
+        btn.className = 'btn-start';
+      } else {
+        sw.lastTick = performance.now();
+        sw.running = true;
+        btn.textContent = 'Stop';
+        btn.className = 'btn-stop';
+      }
+    }
+
+
+    function lapStopwatch(id) {
+      const sw = stopwatches.find(s => s.id === id);
+      if (!sw) return;
+      const current = sw.running ? sw.elapsed + (performance.now() - sw.lastTick) : sw.elapsed;
+      if (current === 0) return;
+      sw.laps.unshift(current);
+      const lapsEl = document.getElementById(`laps-${id}`);
+      lapsEl.innerHTML = sw.laps.map((t, i) => 
+        `<div class="lap-item"><span>Lap ${sw.laps.length - i}</span><span>${formatTime(t)}</span></div>`
+      ).join('');
+    }
+
+
+    function resetStopwatch(id) {
+      const sw = stopwatches.find(s => s.id === id);
+      if (!sw) return;
+      sw.running = false;
+      sw.elapsed = 0;
+      sw.laps = [];
+      document.getElementById(`time-${id}`).textContent = '00:00';
+      document.getElementById(`laps-${id}`).innerHTML = '';
+      const btn = document.getElementById(`toggle-${id}`);
+      btn.textContent = 'Start';
+      btn.className = 'btn-start';
+    }
+
+
+    function removeStopwatch(id) {
+      stopwatches = stopwatches.filter(s => s.id !== id);
+      document.getElementById(`sw-${id}`).remove();
+    }
+
+
+    function controlAll(action) {
+      stopwatches.forEach(sw => {
+        if (action === 'start' && !sw.running) toggleStopwatch(sw.id);
+        if (action === 'stop' && sw.running) toggleStopwatch(sw.id);
+        if (action === 'reset') resetStopwatch(sw.id);
+      });
+    }
+
+
+    function updateLoop() {
+      const now = performance.now();
+      stopwatches.forEach(sw => {
+        if (sw.running) {
+          const total = sw.elapsed + (now - sw.lastTick);
+          document.getElementById(`time-${sw.id}`).textContent = formatTime(total);
+        }
+      });
+      requestAnimationFrame(updateLoop);
+    }
+
+
+    addStopwatch();
+    addStopwatch();
+    requestAnimationFrame(updateLoop);
+  </script>
+</body>
+</html>
